@@ -1,7 +1,9 @@
+import select
 import shutil
+import sys
+import termios
+import tty
 
-from readchar import key as kc
-from readchar import readkey
 from rich import box
 from rich.align import Align
 from rich.console import Console, Group
@@ -12,6 +14,32 @@ from rich.text import Text
 from packages.database.repository import Repository
 from packages.shared.config import settings
 from packages.shared.constants import CATEGORIES, Difficulty
+
+# Key constants
+CTRL_C = "\x03"
+ENTER = "\r"
+BACKSPACE = "\x7f"
+ESC = "\x1b"
+UP = "\x1b[A"
+DOWN = "\x1b[B"
+
+
+def read_key() -> str:
+    """Read a single keypress with near-zero ESC delay."""
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+        if ch == ESC:
+            if select.select([fd], [], [], 0.008)[0]:
+                ch += sys.stdin.read(1)
+                if select.select([fd], [], [], 0.004)[0]:
+                    ch += sys.stdin.read(1)
+        return ch
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
 
 console = Console()
 repo = Repository(settings.db_path)
@@ -197,7 +225,7 @@ def show_confirm(s: State, live: Live, message: str, style: str = "green") -> No
     s.status_style = style
     live.update(render(s))
     live.refresh()
-    readkey()
+    read_key()
     s.screen = "welcome"
     s.menu_idx = 0
 
@@ -209,14 +237,17 @@ def run_interactive() -> None:
         live.refresh()
 
         while True:
-            k = readkey()
+            k = read_key()
+
+            if k == CTRL_C:
+                break
 
             if s.screen == "welcome":
-                if k == kc.UP:
+                if k == UP:
                     s.menu_idx = (s.menu_idx - 1) % len(WELCOME_OPTIONS)
-                elif k == kc.DOWN:
+                elif k == DOWN:
                     s.menu_idx = (s.menu_idx + 1) % len(WELCOME_OPTIONS)
-                elif k == kc.ENTER:
+                elif k == ENTER:
                     choice = s.menu_idx
                     if choice == 0:
                         s.field_idx = 0
@@ -232,26 +263,26 @@ def run_interactive() -> None:
                         push_input(s, HARD_PROBLEM_FIELDS[0][1], HARD_PROBLEM_FIELDS[0][0])
 
             elif s.screen in ("input", "input_waiting"):
-                if k == kc.ESC:
+                if k == ESC:
                     s.screen = "welcome"
                     s.menu_idx = 0
-                elif k == kc.ENTER:
+                elif k == ENTER:
                     s.collected[s.input_field] = s.input_value
                     _advance_input(s, live)
-                elif k in (kc.BACKSPACE, "\x7f"):
+                elif k in (BACKSPACE, "\x7f"):
                     s.input_value = s.input_value[:-1]
                 elif len(k) == 1:
                     s.input_value += k
 
             elif s.screen == "category_picker":
-                if k == kc.ESC:
+                if k == ESC:
                     s.screen = "welcome"
                     s.menu_idx = 0
-                elif k == kc.UP:
+                elif k == UP:
                     s.menu_idx = (s.menu_idx - 1) % len(CATEGORIES)
-                elif k == kc.DOWN:
+                elif k == DOWN:
                     s.menu_idx = (s.menu_idx + 1) % len(CATEGORIES)
-                elif k == kc.ENTER:
+                elif k == ENTER:
                     s.collected["category"] = CATEGORIES[s.menu_idx]
                     s.collected["difficulty"] = Difficulty.medium
                     push_picker(
@@ -264,28 +295,28 @@ def run_interactive() -> None:
 
             elif s.screen == "difficulty_picker":
                 diffs = [Difficulty.easy, Difficulty.medium, Difficulty.hard]
-                if k == kc.ESC:
+                if k == ESC:
                     s.screen = "welcome"
                     s.menu_idx = 0
-                elif k == kc.UP:
+                elif k == UP:
                     s.menu_idx = (s.menu_idx - 1) % 3
-                elif k == kc.DOWN:
+                elif k == DOWN:
                     s.menu_idx = (s.menu_idx + 1) % 3
-                elif k == kc.ENTER:
+                elif k == ENTER:
                     s.collected["difficulty"] = diffs[s.menu_idx]
                     _finalize_entry(s, live)
 
             elif s.screen == "project_picker":
                 projects = repo.get_projects()
                 names = [p.name for p in projects] + ["+ Create new project"]
-                if k == kc.ESC:
+                if k == ESC:
                     s.screen = "welcome"
                     s.menu_idx = 0
-                elif k == kc.UP:
+                elif k == UP:
                     s.menu_idx = (s.menu_idx - 1) % len(names)
-                elif k == kc.DOWN:
+                elif k == DOWN:
                     s.menu_idx = (s.menu_idx + 1) % len(names)
-                elif k == kc.ENTER:
+                elif k == ENTER:
                     if s.menu_idx == len(names) - 1:
                         push_input(s, "New project name:", "project_name")
                     else:
