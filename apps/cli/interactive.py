@@ -204,7 +204,7 @@ def render_entry_list(s: State, w: int, h: int) -> Panel:
     items: list[Text] = []
     for i, entry in enumerate(visible):
         actual_idx = s.entry_scroll + i
-        date = entry.created_at.strftime("%b %d")
+        date = entry.created_at.strftime("%b %d %H:%M")
         preview = entry.content[:50].replace("\n", " ")
         project = entry.project.name if entry.project else ""
         pname = f"  {project}" if project else ""
