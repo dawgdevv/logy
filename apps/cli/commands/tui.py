@@ -7,7 +7,7 @@ app = typer.Typer()
 console = Console()
 
 
-@app.command()
+@app.callback(invoke_without_command=True)
 def start() -> None:
     """Launch the Textual TUI."""
     tui_main()
