@@ -1,6 +1,6 @@
 import typer
 
-from apps.cli.commands import log, projects, review, search, serve
+from apps.cli.commands import log, projects, review, search, serve, tui
 from apps.cli.interactive import run_interactive
 
 app = typer.Typer(
@@ -15,6 +15,7 @@ app.add_typer(search.app, name="search", help="Search entries")
 app.add_typer(projects.app, name="projects", help="Manage projects")
 app.add_typer(serve.app, name="serve", help="Start the web dashboard")
 app.add_typer(review.app, name="review", help="Generate weekly review")
+app.add_typer(tui.app, name="tui", help="Launch the Textual TUI")
 
 
 @app.callback(invoke_without_command=True)
