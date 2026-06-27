@@ -25,17 +25,24 @@ UP = "\x1b[A"
 DOWN = "\x1b[B"
 
 
+_poller: select.poll | None = None
+
+
 def read_key() -> str:
-    """Read a single keypress. Uses os.read to bypass stdio buffering."""
+    """Read a single keypress with microsecond-precision poll()."""
+    global _poller
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     tty.setraw(fd)
+    if _poller is None:
+        _poller = select.poll()
+        _poller.register(fd, select.POLLIN)
     try:
         ch = os.read(fd, 1).decode("utf-8", errors="replace")
         if ch == ESC:
-            if select.select([fd], [], [], 0.005)[0]:
+            if _poller.poll(500):  # 500µs = 0.5ms
                 ch += os.read(fd, 1).decode("utf-8", errors="replace")
-                if select.select([fd], [], [], 0.002)[0]:
+                if _poller.poll(0):  # pure poll, no wait
                     ch += os.read(fd, 1).decode("utf-8", errors="replace")
         return ch
     finally:
