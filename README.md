@@ -41,13 +41,12 @@ uv run logy serve start
 | Layer | Choice |
 |-------|--------|
 | Runtime | Python 3.12+ |
-| CLI | Typer + Rich |
-| TUI | Textual |
+| CLI | Typer + Rich (interactive TUI) |
 | API | FastAPI |
 | Database | SQLite via SQLModel |
 | AI | LiteLLM |
 | Knowledge Graph | Cognee + NetworkX |
-| Web | React + Vite + Tailwind CSS |
+| Web | React + Vite + Tailwind CSS (future) |
 | Package Manager | uv |
 | Linter | ruff |
 
@@ -55,14 +54,13 @@ uv run logy serve start
 
 ```
 apps/
-├── cli/          # Typer CLI + interactive TUI
-├── tui/          # Textual TUI
+├── cli/          # Typer CLI + interactive Rich TUI
 ├── server/       # FastAPI backend
-└── web/          # React dashboard
+└── web/          # React dashboard (future)
 packages/
-├── ai/           # LiteLLM enrichment
-├── cognee/       # Cognee integration
-├── database/     # SQLModel models
+├── ai/           # LiteLLM enrichment (future)
+├── cognee/       # Cognee integration (future)
+├── database/     # SQLModel models + repository
 └── shared/       # Config, constants, utils
 ```
 
