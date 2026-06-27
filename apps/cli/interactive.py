@@ -56,9 +56,8 @@ WELCOME_OPTIONS = [
     ("Daily Log", "What did you build or learn?"),
     ("Project", "Log work for a specific project"),
     ("Hard Problem", "Solved something tough?"),
+    ("Recent Entries", "Browse your history"),
 ]
-
-SCREEN_NAMES = ["daily_log", "project", "hard_problem"]
 
 
 class State:
@@ -72,6 +71,10 @@ class State:
         self.status_msg = ""
         self.status_style = "green"
         self.project_idx = 0
+        self.entries: list = []
+        self.entry_idx = 0
+        self.entry_scroll = 0
+        self.selected_entry: dict | None = None
 
 
 def term_size() -> tuple[int, int]:
@@ -182,6 +185,91 @@ def render_confirm(s: State, w: int, h: int, message: str) -> Panel:
     return make_panel(content, w, h)
 
 
+def render_entry_list(s: State, w: int, h: int) -> Panel:
+    if not s.entries:
+        msg = Text("No entries yet. Go log something!", style="dim")
+        hint = Text("Press any key to go back", style="italic dim")
+        return make_panel(Group(header_block(), Text(""), msg, Text(""), hint), w, h)
+
+    max_visible = h - 10
+    if s.entry_idx < s.entry_scroll:
+        s.entry_scroll = s.entry_idx
+    if s.entry_idx >= s.entry_scroll + max_visible:
+        s.entry_scroll = s.entry_idx - max_visible + 1
+
+    visible = s.entries[s.entry_scroll : s.entry_scroll + max_visible]
+
+    title_text = Text("Recent Entries", style="bold")
+
+    items: list[Text] = []
+    for i, entry in enumerate(visible):
+        actual_idx = s.entry_scroll + i
+        date = entry.created_at.strftime("%b %d")
+        preview = entry.content[:50].replace("\n", " ")
+        project = entry.project.name if entry.project else ""
+        pname = f"  {project}" if project else ""
+        line = f"  {date}  {preview:<50}{pname}"
+        if actual_idx == s.entry_idx:
+            items.append(Text(f"→ {line}", style="bold cyan"))
+        else:
+            items.append(Text(f"  {line}", style="dim"))
+
+    hint_text = "  ↑↓ navigate · ↵ view · Esc back"
+    if len(s.entries) > max_visible:
+        hint_text += f"  ({s.entry_idx + 1}/{len(s.entries)})"
+    hint = Text(hint_text, style="italic dim")
+
+    content = Group(header_block(), Text(""), title_text, Text(""), *items, Text(""), hint)
+    return make_panel(content, w, h)
+
+
+def render_entry_detail(s: State, w: int, h: int) -> Panel:
+    entry = s.selected_entry
+    if not entry:
+        return render_entry_list(s, w, h)
+
+    date = entry.created_at.strftime("%Y-%m-%d %H:%M")
+    project = entry.project.name if entry.project else "—"
+    diff = entry.difficulty.value if hasattr(entry.difficulty, "value") else str(entry.difficulty)
+    diff_style = {"easy": "green", "medium": "yellow", "hard": "red"}.get(diff, "dim")
+
+    meta = Text()
+    meta.append(f"  {date}", style="dim")
+    meta.append(f"  |  {project}", style="cyan")
+    meta.append("  |  ", style="dim")
+    meta.append(diff, style=diff_style)
+    meta.append(f"  |  {entry.category}", style="dim")
+
+    lines = entry.content.split("\n")
+    content_lines_padded = [f"  {line}" for line in lines[: h - 14]]
+    content_text = Text("\n".join(content_lines_padded), style="white")
+    if len(lines) > h - 14:
+        content_text.append("\n  ...", style="dim")
+
+    hint = Text("  ↵ or Esc to go back", style="italic dim")
+
+    detail_title = Text("Entry Detail", style="bold")
+    parts = [
+        header_block(),
+        Text(""),
+        detail_title,
+        Text(""),
+        meta,
+        Text(""),
+        content_text,
+        Text(""),
+        hint,
+    ]
+    group = Group(*parts)
+    return Panel(
+        Align.center(group, vertical="top"),
+        box=box.ROUNDED,
+        border_style="cyan",
+        width=w,
+        height=h,
+    )
+
+
 def render(s: State) -> Panel:
     w, h = term_size()
     if s.screen == "welcome":
@@ -198,6 +286,10 @@ def render(s: State) -> Panel:
         return render_picker(s, w, h, "Select project:", names)
     if s.screen == "confirm":
         return render_confirm(s, w, h, s.status_msg)
+    if s.screen == "entry_list":
+        return render_entry_list(s, w, h)
+    if s.screen == "entry_detail":
+        return render_entry_detail(s, w, h)
     return make_panel(Text(""), w, h)
 
 
@@ -269,6 +361,11 @@ def run_interactive() -> None:
                         s.field_idx = 0
                         s.collected = {}
                         push_input(s, HARD_PROBLEM_FIELDS[0][1], HARD_PROBLEM_FIELDS[0][0])
+                    elif choice == 3:
+                        s.entries = repo.get_entries(limit=200)
+                        s.entry_idx = 0
+                        s.entry_scroll = 0
+                        s.screen = "entry_list"
 
             elif s.screen in ("input", "input_waiting"):
                 if k == ESC:
@@ -313,6 +410,26 @@ def run_interactive() -> None:
                 elif k == ENTER:
                     s.collected["difficulty"] = diffs[s.menu_idx]
                     _finalize_entry(s, live)
+
+            elif s.screen == "entry_list":
+                if k == ESC:
+                    s.screen = "welcome"
+                    s.menu_idx = 0
+                elif not s.entries:
+                    pass
+                elif k == UP:
+                    if s.entry_idx > 0:
+                        s.entry_idx -= 1
+                elif k == DOWN:
+                    if s.entry_idx < len(s.entries) - 1:
+                        s.entry_idx += 1
+                elif k == ENTER:
+                    s.selected_entry = s.entries[s.entry_idx]
+                    s.screen = "entry_detail"
+
+            elif s.screen == "entry_detail":
+                if k in (ESC, ENTER):
+                    s.screen = "entry_list"
 
             elif s.screen == "project_picker":
                 projects = repo.get_projects()
