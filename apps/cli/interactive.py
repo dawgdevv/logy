@@ -1,3 +1,4 @@
+import os
 import select
 import shutil
 import sys
@@ -25,17 +26,17 @@ DOWN = "\x1b[B"
 
 
 def read_key() -> str:
-    """Read a single keypress with near-zero ESC delay."""
+    """Read a single keypress. Uses os.read to bypass stdio buffering."""
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
+    tty.setraw(fd)
     try:
-        tty.setraw(fd)
-        ch = sys.stdin.read(1)
+        ch = os.read(fd, 1).decode("utf-8", errors="replace")
         if ch == ESC:
-            if select.select([fd], [], [], 0.008)[0]:
-                ch += sys.stdin.read(1)
-                if select.select([fd], [], [], 0.004)[0]:
-                    ch += sys.stdin.read(1)
+            if select.select([fd], [], [], 0.005)[0]:
+                ch += os.read(fd, 1).decode("utf-8", errors="replace")
+                if select.select([fd], [], [], 0.002)[0]:
+                    ch += os.read(fd, 1).decode("utf-8", errors="replace")
         return ch
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
