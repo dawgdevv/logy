@@ -11,7 +11,7 @@ from rich.text import Text
 
 from packages.database.repository import Repository
 from packages.shared.config import settings
-from packages.shared.constants import APP_VERSION, CATEGORIES, Difficulty
+from packages.shared.constants import CATEGORIES, Difficulty
 
 console = Console()
 repo = Repository(settings.db_path)
@@ -54,25 +54,21 @@ def make_panel(content, width: int, height: int) -> Panel:
 
 
 def centered(text: str, style: str = "") -> Text:
-    t = Text(text, style=style, no_wrap=True)
-    return t
+    return Text(text, style=style, no_wrap=True)
+
+
+def header_block() -> Group:
+    title = Text()
+    title.append("logy", style="bold cyan")
+    title.append("  ", style="")
+    title.append("v1.0", style="dim white")
+
+    tagline = Text("Terminal-first professional memory", style="italic dim")
+
+    return Group(title, tagline)
 
 
 def render_welcome(s: State, w: int, h: int) -> Panel:
-    logo = Text(
-        "  ▄▄▄      ▄▄▄  \n"
-        "  ██   ██    ██   ██\n"
-        "  ███████    ███████\n"
-        "  ██   ██    ██   ██\n"
-        "  ██   ██    ██   ██",
-        style="cyan",
-        no_wrap=True,
-    )
-
-    title = Text()
-    title.append("logy", style="bold cyan")
-    title.append(f"  v{APP_VERSION}", style="dim")
-
     question = Text("What did you work on today?", style="bold")
 
     items: list[Text] = []
@@ -84,7 +80,16 @@ def render_welcome(s: State, w: int, h: int) -> Panel:
 
     hint = Text("  ↑↓ · ↵ select", style="italic dim")
 
-    parts = [logo, Text(""), title, Text(""), Text(""), question, Text(""), *items, Text(""), hint]
+    parts = [
+        header_block(),
+        Text(""),
+        Text(""),
+        question,
+        Text(""),
+        *items,
+        Text(""),
+        hint,
+    ]
     return make_panel(Group(*parts), w, h)
 
 
@@ -118,16 +123,6 @@ def render_input(s: State, w: int, h: int) -> Panel:
 
 
 def render_picker(s: State, w: int, h: int, title: str, options: list[str]) -> Panel:
-    logo = Text(
-        "  ▄▄▄      ▄▄▄  \n"
-        "  ██   ██    ██   ██\n"
-        "  ███████    ███████\n"
-        "  ██   ██    ██   ██\n"
-        "  ██   ██    ██   ██",
-        style="cyan",
-        no_wrap=True,
-    )
-
     title_text = Text(title, style="bold")
 
     items: list[Text] = []
@@ -139,25 +134,15 @@ def render_picker(s: State, w: int, h: int, title: str, options: list[str]) -> P
 
     hint = Text("  ↑↓ · ↵ select · Esc back", style="italic dim")
 
-    content = Group(logo, Text(""), title_text, Text(""), *items, Text(""), hint)
+    content = Group(header_block(), Text(""), title_text, Text(""), *items, Text(""), hint)
     return make_panel(content, w, h)
 
 
 def render_confirm(s: State, w: int, h: int, message: str) -> Panel:
-    logo = Text(
-        "  ▄▄▄      ▄▄▄  \n"
-        "  ██   ██    ██   ██\n"
-        "  ███████    ███████\n"
-        "  ██   ██    ██   ██\n"
-        "  ██   ██    ██   ██",
-        style="cyan",
-        no_wrap=True,
-    )
-
     msg = Text(message, style=s.status_style)
     cont = Text("Press any key to continue", style="dim")
 
-    content = Group(logo, Text(""), msg, Text(""), cont)
+    content = Group(header_block(), Text(""), msg, Text(""), cont)
     return make_panel(content, w, h)
 
 
