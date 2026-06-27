@@ -1,13 +1,7 @@
 import typer
 
 from apps.cli.commands import log, projects, review, search, serve
-from apps.cli.interactive import (
-    daily_log_flow,
-    hard_problem_flow,
-    pick_option,
-    project_flow,
-    show_welcome,
-)
+from apps.cli.interactive import run_interactive
 
 app = typer.Typer(
     name="logy",
@@ -28,14 +22,7 @@ def main(ctx: typer.Context) -> None:
     """Terminal-first professional memory for builders."""
     if ctx.invoked_subcommand is not None:
         return
-    show_welcome()
-    choice = pick_option()
-    if choice == 1:
-        daily_log_flow()
-    elif choice == 2:
-        project_flow()
-    elif choice == 3:
-        hard_problem_flow()
+    run_interactive()
 
 
 if __name__ == "__main__":

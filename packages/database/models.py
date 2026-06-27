@@ -9,12 +9,8 @@ from packages.shared.utils import utcnow
 
 class EntryTagLink(SQLModel, table=True):
     __tablename__ = "entry_tags"
-    entry_id: int | None = Field(
-        default=None, foreign_key="entries.id", primary_key=True
-    )
-    tag_id: int | None = Field(
-        default=None, foreign_key="tags.id", primary_key=True
-    )
+    entry_id: int | None = Field(default=None, foreign_key="entries.id", primary_key=True)
+    tag_id: int | None = Field(default=None, foreign_key="tags.id", primary_key=True)
 
 
 class Entry(SQLModel, table=True):

@@ -1,10 +1,12 @@
 import shutil
 
+from readchar import key as kc
+from readchar import readkey
 from rich import box
 from rich.align import Align
 from rich.console import Console, Group
+from rich.live import Live
 from rich.panel import Panel
-from rich.prompt import IntPrompt, Prompt
 from rich.text import Text
 
 from packages.database.repository import Repository
@@ -14,10 +16,49 @@ from packages.shared.constants import APP_VERSION, CATEGORIES, Difficulty
 console = Console()
 repo = Repository(settings.db_path)
 
+WELCOME_OPTIONS = [
+    ("Daily Log", "What did you build or learn?"),
+    ("Project", "Log work for a specific project"),
+    ("Hard Problem", "Solved something tough?"),
+]
 
-def show_welcome() -> None:
-    term = shutil.get_terminal_size()
+SCREEN_NAMES = ["daily_log", "project", "hard_problem"]
 
+
+class State:
+    def __init__(self) -> None:
+        self.screen = "welcome"
+        self.menu_idx = 0
+        self.input_prompt = ""
+        self.input_value = ""
+        self.field_idx = 0
+        self.collected: dict = {}
+        self.status_msg = ""
+        self.status_style = "green"
+        self.project_idx = 0
+
+
+def term_size() -> tuple[int, int]:
+    t = shutil.get_terminal_size()
+    return t.columns, t.lines
+
+
+def make_panel(content, width: int, height: int) -> Panel:
+    return Panel(
+        Align.center(content, vertical="middle"),
+        box=box.ROUNDED,
+        border_style="cyan",
+        width=width,
+        height=height,
+    )
+
+
+def centered(text: str, style: str = "") -> Text:
+    t = Text(text, style=style, no_wrap=True)
+    return t
+
+
+def render_welcome(s: State, w: int, h: int) -> Panel:
     logo = Text(
         "  ▄▄▄      ▄▄▄  \n"
         "  ██   ██    ██   ██\n"
@@ -34,160 +75,278 @@ def show_welcome() -> None:
 
     question = Text("What did you work on today?", style="bold")
 
-    option1 = Text("  [1]  Daily Log    —  What did you build or learn?")
-    option2 = Text("  [2]  Project      —  Log work for a specific project")
-    option3 = Text("  [3]  Hard Problem —  Solved something tough?")
-
-    content = Group(
-        logo,
-        Text(""),
-        title,
-        Text(""),
-        Text(""),
-        question,
-        Text(""),
-        option1,
-        option2,
-        option3,
-        Text(""),
-    )
-
-    console.clear()
-    console.print(
-        Panel(
-            Align.center(content, vertical="middle"),
-            box=box.ROUNDED,
-            border_style="cyan",
-            width=term.columns,
-            height=term.lines,
-        )
-    )
-
-
-def pick_option() -> int:
-    console.print()
-    choice = IntPrompt.ask("Choose", choices=["1", "2", "3"], default=1)
-    return choice
-
-
-def daily_log_flow() -> None:
-    console.print("\n[bold cyan]Daily Log[/bold cyan] — What did you build or learn today?\n")
-    content = Prompt.ask("Today's work", default="")
-    if not content:
-        console.print("[yellow]Nothing logged.[/yellow]")
-        return
-
-    project = Prompt.ask("Project (or press Enter to skip)", default="")
-    category = _pick_category()
-    difficulty = _pick_difficulty()
-    tags_str = Prompt.ask("Tags (comma-separated, or press Enter to skip)", default="")
-
-    tags = [t.strip() for t in tags_str.split(",")] if tags_str else None
-    entry = repo.create_entry(
-        content=content,
-        project_name=project or None,
-        category=category,
-        difficulty=difficulty,
-        tags=tags,
-    )
-    console.print(f"\n[green]✓[/green] Logged entry #{entry.id}\n")
-
-
-def project_flow() -> None:
-    console.print("\n[bold cyan]Project Log[/bold cyan]\n")
-    projects = repo.get_projects()
-    project_names = [p.name for p in projects]
-
-    if project_names:
-        console.print("[bold]Existing projects:[/bold]")
-        for i, name in enumerate(project_names, 1):
-            console.print(f"  [bold cyan]{i}[/]  {name}")
-        console.print(f"  [bold cyan]{len(project_names) + 1}[/]  [dim]Create new project[/dim]")
-        console.print()
-
-        choice = IntPrompt.ask(
-            "Select a project",
-            choices=[str(i) for i in range(1, len(project_names) + 2)],
-        )
-        if choice == len(project_names) + 1:
-            project_name = Prompt.ask("New project name")
+    items: list[Text] = []
+    for i, (label, desc) in enumerate(WELCOME_OPTIONS):
+        if i == s.menu_idx:
+            items.append(Text(f"  →  {label}  —  {desc}", style="bold cyan"))
         else:
-            project_name = project_names[choice - 1]
-    else:
-        console.print("[yellow]No projects yet.[/yellow]")
-        project_name = Prompt.ask("New project name")
-        if not project_name:
-            console.print("[yellow]Cancelled.[/yellow]")
-            return
+            items.append(Text(f"     {label}  —  {desc}", style="dim"))
 
-    console.print(f"\nLogging for project: [bold cyan]{project_name}[/bold cyan]\n")
-    content = Prompt.ask("What did you build?")
-    if not content:
-        console.print("[yellow]Nothing logged.[/yellow]")
+    hint = Text("  ↑↓ · ↵ select", style="italic dim")
+
+    parts = [logo, Text(""), title, Text(""), Text(""), question, Text(""), *items, Text(""), hint]
+    return make_panel(Group(*parts), w, h)
+
+
+def render_input(s: State, w: int, h: int) -> Panel:
+    lines = []
+    lines.append(centered(""))
+    lines.append(centered(s.input_prompt, "bold"))
+    lines.append(centered(""))
+
+    display = s.input_value if s.input_value else " "
+    if s.screen != "input_waiting":
+        display = display + "\u2588"
+    input_box = Panel(
+        Text(display, no_wrap=True),
+        box=box.SQUARE,
+        border_style="white",
+        width=min(w - 8, 60),
+        height=3,
+        padding=(0, 1),
+    )
+    lines.append(input_box)
+    lines.append(Text(""))
+
+    if s.screen != "input_waiting":
+        lines.append(centered("Esc to go back", "dim"))
+    else:
+        lines.append(centered(""))
+
+    content = Group(*lines)
+    return make_panel(content, w, h)
+
+
+def render_picker(s: State, w: int, h: int, title: str, options: list[str]) -> Panel:
+    logo = Text(
+        "  ▄▄▄      ▄▄▄  \n"
+        "  ██   ██    ██   ██\n"
+        "  ███████    ███████\n"
+        "  ██   ██    ██   ██\n"
+        "  ██   ██    ██   ██",
+        style="cyan",
+        no_wrap=True,
+    )
+
+    title_text = Text(title, style="bold")
+
+    items: list[Text] = []
+    for i, opt in enumerate(options):
+        if i == s.menu_idx:
+            items.append(Text(f"  →  {opt}", style="bold cyan"))
+        else:
+            items.append(Text(f"     {opt}", style="dim"))
+
+    hint = Text("  ↑↓ · ↵ select · Esc back", style="italic dim")
+
+    content = Group(logo, Text(""), title_text, Text(""), *items, Text(""), hint)
+    return make_panel(content, w, h)
+
+
+def render_confirm(s: State, w: int, h: int, message: str) -> Panel:
+    logo = Text(
+        "  ▄▄▄      ▄▄▄  \n"
+        "  ██   ██    ██   ██\n"
+        "  ███████    ███████\n"
+        "  ██   ██    ██   ██\n"
+        "  ██   ██    ██   ██",
+        style="cyan",
+        no_wrap=True,
+    )
+
+    msg = Text(message, style=s.status_style)
+    cont = Text("Press any key to continue", style="dim")
+
+    content = Group(logo, Text(""), msg, Text(""), cont)
+    return make_panel(content, w, h)
+
+
+def render(s: State) -> Panel:
+    w, h = term_size()
+    if s.screen == "welcome":
+        return render_welcome(s, w, h)
+    if s.screen in ("input", "input_waiting"):
+        return render_input(s, w, h)
+    if s.screen == "category_picker":
+        return render_picker(s, w, h, "Category:", CATEGORIES)
+    if s.screen == "difficulty_picker":
+        return render_picker(s, w, h, "Difficulty:", ["Easy", "Medium", "Hard"])
+    if s.screen == "project_picker":
+        projects = repo.get_projects()
+        names = [p.name for p in projects] + ["+ Create new project"]
+        return render_picker(s, w, h, "Select project:", names)
+    if s.screen == "confirm":
+        return render_confirm(s, w, h, s.status_msg)
+    return make_panel(Text(""), w, h)
+
+
+def push_input(s: State, prompt: str, field: str) -> None:
+    s.input_prompt = prompt
+    s.input_value = ""
+    s.input_field = field
+    s.screen = "input"
+
+
+def push_picker(s: State, screen: str, title: str, options: list[str], field: str) -> None:
+    s.screen = screen
+    s.menu_idx = 0
+    s.input_field = field
+
+
+DAILY_FIELDS = [
+    ("content", "What did you build or learn today?"),
+    ("project", "Project (or press Enter to skip)"),
+]
+
+HARD_PROBLEM_FIELDS = [
+    ("content", "What was the problem?"),
+    ("solution", "How did you solve it?"),
+    ("lessons", "Lessons learned"),
+    ("project", "Project (or press Enter to skip)"),
+]
+
+
+def show_confirm(s: State, live: Live, message: str, style: str = "green") -> None:
+    s.screen = "confirm"
+    s.status_msg = message
+    s.status_style = style
+    live.update(render(s))
+    live.refresh()
+    readkey()
+    s.screen = "welcome"
+    s.menu_idx = 0
+
+
+def run_interactive() -> None:
+    s = State()
+
+    with Live(render(s), screen=True, auto_refresh=False) as live:
+        live.refresh()
+
+        while True:
+            k = readkey()
+
+            if s.screen == "welcome":
+                if k == kc.UP:
+                    s.menu_idx = (s.menu_idx - 1) % len(WELCOME_OPTIONS)
+                elif k == kc.DOWN:
+                    s.menu_idx = (s.menu_idx + 1) % len(WELCOME_OPTIONS)
+                elif k == kc.ENTER:
+                    choice = s.menu_idx
+                    if choice == 0:
+                        s.field_idx = 0
+                        s.collected = {}
+                        push_input(s, DAILY_FIELDS[0][1], DAILY_FIELDS[0][0])
+                    elif choice == 1:
+                        projects = repo.get_projects()
+                        names = [p.name for p in projects] + ["+ Create new project"]
+                        push_picker(s, "project_picker", "Select project:", names, "project_name")
+                    elif choice == 2:
+                        s.field_idx = 0
+                        s.collected = {}
+                        push_input(s, HARD_PROBLEM_FIELDS[0][1], HARD_PROBLEM_FIELDS[0][0])
+
+            elif s.screen in ("input", "input_waiting"):
+                if k == kc.ESC:
+                    s.screen = "welcome"
+                    s.menu_idx = 0
+                elif k == kc.ENTER:
+                    s.collected[s.input_field] = s.input_value
+                    _advance_input(s, live)
+                elif k in (kc.BACKSPACE, "\x7f"):
+                    s.input_value = s.input_value[:-1]
+                elif len(k) == 1:
+                    s.input_value += k
+
+            elif s.screen == "category_picker":
+                if k == kc.ESC:
+                    s.screen = "welcome"
+                    s.menu_idx = 0
+                elif k == kc.UP:
+                    s.menu_idx = (s.menu_idx - 1) % len(CATEGORIES)
+                elif k == kc.DOWN:
+                    s.menu_idx = (s.menu_idx + 1) % len(CATEGORIES)
+                elif k == kc.ENTER:
+                    s.collected["category"] = CATEGORIES[s.menu_idx]
+                    s.collected["difficulty"] = Difficulty.medium
+                    push_picker(
+                        s,
+                        "difficulty_picker",
+                        "Difficulty:",
+                        ["Easy", "Medium", "Hard"],
+                        "difficulty",
+                    )
+
+            elif s.screen == "difficulty_picker":
+                diffs = [Difficulty.easy, Difficulty.medium, Difficulty.hard]
+                if k == kc.ESC:
+                    s.screen = "welcome"
+                    s.menu_idx = 0
+                elif k == kc.UP:
+                    s.menu_idx = (s.menu_idx - 1) % 3
+                elif k == kc.DOWN:
+                    s.menu_idx = (s.menu_idx + 1) % 3
+                elif k == kc.ENTER:
+                    s.collected["difficulty"] = diffs[s.menu_idx]
+                    _finalize_entry(s, live)
+
+            elif s.screen == "project_picker":
+                projects = repo.get_projects()
+                names = [p.name for p in projects] + ["+ Create new project"]
+                if k == kc.ESC:
+                    s.screen = "welcome"
+                    s.menu_idx = 0
+                elif k == kc.UP:
+                    s.menu_idx = (s.menu_idx - 1) % len(names)
+                elif k == kc.DOWN:
+                    s.menu_idx = (s.menu_idx + 1) % len(names)
+                elif k == kc.ENTER:
+                    if s.menu_idx == len(names) - 1:
+                        push_input(s, "New project name:", "project_name")
+                    else:
+                        s.collected["project_name"] = names[s.menu_idx]
+                        push_input(s, "What did you build?", "content")
+
+            live.update(render(s))
+            live.refresh()
+
+
+def _advance_input(s: State, live: Live) -> None:
+    if s.collected.get("content") == "":
+        show_confirm(s, live, "Nothing logged.", "yellow")
         return
 
-    category = _pick_category()
-    difficulty = _pick_difficulty()
-    tags_str = Prompt.ask("Tags (comma-separated, or press Enter to skip)", default="")
+    if s.screen == "input":
+        s.screen = "input_waiting"
 
-    tags = [t.strip() for t in tags_str.split(",")] if tags_str else None
+    fields = DAILY_FIELDS if s.collected.get("solution") is None else HARD_PROBLEM_FIELDS
+
+    next_idx = s.field_idx + 1
+    project_name = s.collected.get("project_name")
+
+    if project_name and next_idx >= len(fields):
+        push_picker(s, "category_picker", "Category:", CATEGORIES, "category")
+    elif not project_name and next_idx >= len(fields):
+        push_picker(s, "category_picker", "Category:", CATEGORIES, "category")
+    elif next_idx < len(fields):
+        s.field_idx = next_idx
+        push_input(s, fields[next_idx][1], fields[next_idx][0])
+    else:
+        push_picker(s, "category_picker", "Category:", CATEGORIES, "category")
+
+
+def _finalize_entry(s: State, live: Live) -> None:
+    content = s.collected.get("content", "")
+    project = s.collected.get("project_name") or None
+    category = s.collected.get("category", "other")
+    difficulty = s.collected.get("difficulty", Difficulty.medium)
+    tags = None
+
     entry = repo.create_entry(
         content=content,
-        project_name=project_name,
+        project_name=project,
         category=category,
         difficulty=difficulty,
         tags=tags,
     )
-    console.print(f"\n[green]✓[/green] Logged entry #{entry.id} to [bold]{project_name}[/bold]\n")
-
-
-def hard_problem_flow() -> None:
-    console.print("\n[bold cyan]Hard Problem[/bold cyan] — Solved something tough?\n")
-    context = Prompt.ask("What was the problem?")
-    if not context:
-        console.print("[yellow]Nothing logged.[/yellow]")
-        return
-
-    solution = Prompt.ask("How did you solve it?")
-    lessons = Prompt.ask("Lessons learned", default="")
-    project = Prompt.ask("Project (or press Enter to skip)", default="")
-    tags_str = Prompt.ask("Tags (comma-separated, or press Enter to skip)", default="")
-
-    full_content = context
-    if solution:
-        full_content += f"\n\nSolution: {solution}"
-    if lessons:
-        full_content += f"\n\nLessons: {lessons}"
-
-    tags = [t.strip() for t in tags_str.split(",")] if tags_str else None
-    if tags:
-        tags.append("hard-problem")
-    else:
-        tags = ["hard-problem"]
-
-    entry = repo.create_entry(
-        content=full_content,
-        project_name=project or None,
-        category="bugfix",
-        difficulty=Difficulty.hard,
-        tags=tags,
-    )
-    console.print(f"\n[green]✓[/green] Logged hard problem as entry #{entry.id}\n")
-
-
-def _pick_category() -> str:
-    console.print("\n[bold]Category:[/bold]")
-    for i, cat in enumerate(CATEGORIES, 1):
-        console.print(f"  [bold cyan]{i}[/]  {cat}")
-    cats = [str(i) for i in range(1, len(CATEGORIES) + 1)]
-    choice = IntPrompt.ask("Choose", choices=cats, default=1)
-    return CATEGORIES[choice - 1]
-
-
-def _pick_difficulty() -> Difficulty:
-    console.print("\n[bold]Difficulty:[/bold]")
-    console.print("  [bold cyan]1[/]  [green]Easy[/green]")
-    console.print("  [bold cyan]2[/]  [yellow]Medium[/yellow]")
-    console.print("  [bold cyan]3[/]  [red]Hard[/red]")
-    choice = IntPrompt.ask("Choose", choices=["1", "2", "3"], default=2)
-    return [Difficulty.easy, Difficulty.medium, Difficulty.hard][choice - 1]
+    show_confirm(s, live, f"Logged entry #{entry.id}", "bold green")
