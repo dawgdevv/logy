@@ -25,7 +25,7 @@ UP = "\x1b[A"
 DOWN = "\x1b[B"
 
 
-_poller: select.poll | None = None
+_poller = None
 
 
 def read_key() -> str:
