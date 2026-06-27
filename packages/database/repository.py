@@ -1,7 +1,8 @@
 from pathlib import Path
 
+from sqlalchemy import Engine
 from sqlalchemy.orm import selectinload
-from sqlmodel import Engine, Session, SQLModel, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from packages.database.models import Entry, EntryTagLink, Project, Tag
 from packages.shared.constants import Difficulty
@@ -32,9 +33,7 @@ class Repository:
         with self._session() as session:
             project = None
             if project_name:
-                result = session.exec(
-                    select(Project).where(Project.name == project_name)
-                )
+                result = session.exec(select(Project).where(Project.name == project_name))
                 project = result.first()
                 if not project:
                     project = Project(name=project_name)
@@ -52,9 +51,7 @@ class Repository:
 
             if tags:
                 for tag_name in tags:
-                    result = session.exec(
-                        select(Tag).where(Tag.name == tag_name)
-                    )
+                    result = session.exec(select(Tag).where(Tag.name == tag_name))
                     tag = result.first()
                     if not tag:
                         tag = Tag(name=tag_name)
@@ -67,9 +64,7 @@ class Repository:
             session.refresh(entry)
             return entry
 
-    def get_entries(
-        self, limit: int = 50, offset: int = 0
-    ) -> list[Entry]:
+    def get_entries(self, limit: int = 50, offset: int = 0) -> list[Entry]:
         with self._session() as session:
             statement = (
                 select(Entry)
@@ -110,9 +105,7 @@ class Repository:
     def get_project_by_name(self, name: str) -> Project | None:
         with self._session() as session:
             statement = (
-                select(Project)
-                .options(selectinload(Project.entries))
-                .where(Project.name == name)
+                select(Project).options(selectinload(Project.entries)).where(Project.name == name)
             )
             return session.exec(statement).first()
 
