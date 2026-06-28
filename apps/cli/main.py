@@ -1,7 +1,7 @@
 import typer
 
 from apps.cli.commands import log, projects, review, search, serve
-from apps.cli.interactive import run_interactive
+from apps.cli.tui import run_interactive
 
 app = typer.Typer(
     name="logy",
