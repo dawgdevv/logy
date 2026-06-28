@@ -12,10 +12,23 @@ from .flow import (
     push_input,
     push_picker,
 )
-from .keys import BACKSPACE, CTRL_C, DOWN, ENTER, ESC, UP, read_key
+from .keys import (
+    BACKSPACE,
+    CTRL_C,
+    DOWN,
+    END,
+    ENTER,
+    ESC,
+    HOME,
+    PAGE_DOWN,
+    PAGE_UP,
+    UP,
+    read_key,
+)
 from .state import State
 from .views import render
-from .views.entry_list import _clamp_scroll, _max_visible, term_size
+from .views.entry_detail import _detail_lines, _detail_max_visible, move_detail_scroll
+from .views.entry_list import _clamp_scroll, _max_visible, jump_selection, move_selection, term_size
 
 repo = Repository(settings.db_path)
 
@@ -64,9 +77,10 @@ def run_interactive() -> None:
                         s.project_idx = 0
                         push_input(s, HARD_PROBLEM_FIELDS[0][1], HARD_PROBLEM_FIELDS[0][0])
                     elif choice == 3:
-                        s.entries = repo.get_entries(limit=200)
+                        s.entries = repo.get_entries(limit=None)
                         s.entry_idx = 0
                         s.entry_scroll = 0
+                        s.detail_scroll = 0
                         s.screen = "entry_list"
 
             elif s.screen in ("input", "input_waiting"):
@@ -128,28 +142,50 @@ def run_interactive() -> None:
                     _finalize_entry(s, live)
 
             elif s.screen == "entry_list":
+                _, h = term_size()
+                max_visible = _max_visible(h)
+                _clamp_scroll(s, max_visible)
                 if k == ESC:
                     s.screen = "welcome"
                     s.menu_idx = 0
                 elif not s.entries:
                     pass
                 elif k == UP:
-                    if s.entry_idx > 0:
-                        s.entry_idx -= 1
-                        _, h = term_size()
-                        _clamp_scroll(s, _max_visible(h))
+                    move_selection(s, -1, max_visible)
                 elif k == DOWN:
-                    if s.entry_idx < len(s.entries) - 1:
-                        s.entry_idx += 1
-                        _, h = term_size()
-                        _clamp_scroll(s, _max_visible(h))
+                    move_selection(s, 1, max_visible)
+                elif k == PAGE_UP:
+                    move_selection(s, -max_visible, max_visible)
+                elif k == PAGE_DOWN:
+                    move_selection(s, max_visible, max_visible)
+                elif k in (HOME, "\x1b[1~"):
+                    jump_selection(s, 0, max_visible)
+                elif k in (END, "\x1b[4~"):
+                    jump_selection(s, len(s.entries) - 1, max_visible)
                 elif k == ENTER:
                     s.selected_entry = s.entries[s.entry_idx]
+                    s.detail_scroll = 0
                     s.screen = "entry_detail"
 
             elif s.screen == "entry_detail":
                 if k in (ESC, ENTER):
                     s.screen = "entry_list"
+                elif s.selected_entry:
+                    w, h = term_size()
+                    max_visible = _detail_max_visible(h)
+                    line_count = len(_detail_lines(s.selected_entry, w))
+                    if k == UP:
+                        move_detail_scroll(s, -1, max_visible, line_count)
+                    elif k == DOWN:
+                        move_detail_scroll(s, 1, max_visible, line_count)
+                    elif k == PAGE_UP:
+                        move_detail_scroll(s, -max_visible, max_visible, line_count)
+                    elif k == PAGE_DOWN:
+                        move_detail_scroll(s, max_visible, max_visible, line_count)
+                    elif k in (HOME, "\x1b[1~"):
+                        s.detail_scroll = 0
+                    elif k in (END, "\x1b[4~"):
+                        s.detail_scroll = max(line_count - max_visible, 0)
 
             elif s.screen == "project_picker":
                 projects = repo.get_projects()

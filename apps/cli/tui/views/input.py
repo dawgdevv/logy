@@ -8,12 +8,9 @@ from packages.database.repository import Repository
 from packages.shared.config import settings
 
 from ..state import State
+from .ui import centered, footer_hint, header_block, shell_panel
 
 repo = Repository(settings.db_path)
-
-
-def centered(text: str, style: str = "") -> Text:
-    return Text(text, style=style, no_wrap=True)
 
 
 def _wrap_text(text: str, width: int) -> list[str]:
@@ -42,24 +39,7 @@ def _wrap_text(text: str, width: int) -> list[str]:
 
 
 def make_panel(content, width: int, height: int) -> Panel:
-    return Panel(
-        Align.center(content, vertical="middle"),
-        box=box.ROUNDED,
-        border_style="cyan",
-        width=width,
-        height=height,
-    )
-
-
-def header_block() -> Group:
-    title = Text()
-    title.append("logy", style="bold cyan")
-    title.append("  ", style="")
-    title.append("v1.0", style="dim white")
-
-    tagline = Text("Terminal-first professional memory", style="italic dim")
-
-    return Group(title, tagline)
+    return shell_panel(content, width, height, center=True)
 
 
 def render_input(s: State, w: int, h: int) -> Panel:
@@ -90,14 +70,15 @@ def render_input(s: State, w: int, h: int) -> Panel:
     )
 
     lines_out = []
-    lines_out.append(centered(""))
+    lines_out.append(header_block("Capture"))
+    lines_out.append(Text(""))
     lines_out.append(centered(s.input_prompt, "bold"))
     lines_out.append(centered(""))
     lines_out.append(input_box)
     lines_out.append(Text(""))
 
     if s.input_field == "project_name":
-        lines_out.append(centered("— or pick existing —", "italic dim"))
+        lines_out.append(centered("Pick existing or create new", "italic dim"))
         projects = repo.get_projects()
         names = [p.name for p in projects]
         if not names:
@@ -109,7 +90,7 @@ def render_input(s: State, w: int, h: int) -> Panel:
                 s.project_idx = 0
             for i, opt in enumerate(options):
                 if i == s.project_idx:
-                    lines_out.append(centered(f"  →  {opt}", "bold cyan"))
+                    lines_out.append(centered(f"  ▶  {opt}", "bold cyan"))
                 else:
                     lines_out.append(centered(f"     {opt}", "dim"))
 
@@ -117,9 +98,11 @@ def render_input(s: State, w: int, h: int) -> Panel:
 
     if s.screen != "input_waiting":
         if s.input_field == "project_name":
-            lines_out.append(centered("Esc back   ·   ↑↓ navigate   ·   ↵ select", "dim"))
+            lines_out.append(
+                Align.center(footer_hint(("Esc", "back"), ("↑↓", "move"), ("↵", "select")))
+            )
         else:
-            lines_out.append(centered("Esc to go back", "dim"))
+            lines_out.append(Align.center(footer_hint(("Esc", "back"), ("↵", "continue"))))
     else:
         lines_out.append(centered(""))
 

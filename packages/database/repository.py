@@ -62,17 +62,27 @@ class Repository:
 
             session.commit()
             session.refresh(entry)
-            return entry
+            entry_id = entry.id
 
-    def get_entries(self, limit: int = 50, offset: int = 0) -> list[Entry]:
+        # Re-fetch with eager loading
+        with self._session() as session:
+            statement = (
+                select(Entry)
+                .options(selectinload(Entry.project), selectinload(Entry.tags))
+                .where(Entry.id == entry_id)
+            )
+            return session.exec(statement).first()
+
+    def get_entries(self, limit: int | None = 50, offset: int = 0) -> list[Entry]:
         with self._session() as session:
             statement = (
                 select(Entry)
                 .options(selectinload(Entry.project), selectinload(Entry.tags))
                 .order_by(Entry.created_at.desc())
                 .offset(offset)
-                .limit(limit)
             )
+            if limit is not None:
+                statement = statement.limit(limit)
             return list(session.exec(statement).all())
 
     def get_entry(self, entry_id: int) -> Entry | None:
@@ -109,6 +119,14 @@ class Repository:
             )
             return session.exec(statement).first()
 
+    def create_project(self, name: str, description: str = "") -> Project:
+        with self._session() as session:
+            project = Project(name=name, description=description)
+            session.add(project)
+            session.commit()
+            session.refresh(project)
+            return project
+
     def search_entries(self, query: str) -> list[Entry]:
         with self._session() as session:
             statement = (
@@ -117,3 +135,93 @@ class Repository:
                 .where(Entry.content.contains(query))
             )
             return list(session.exec(statement).all())
+
+    def update_entry(
+        self,
+        entry_id: int,
+        content: str | None = None,
+        category: str | None = None,
+        difficulty: Difficulty | None = None,
+        project_name: str | None = None,
+        tags: list[str] | None = None,
+    ) -> Entry | None:
+        with self._session() as session:
+            statement = (
+                select(Entry)
+                .options(selectinload(Entry.project), selectinload(Entry.tags))
+                .where(Entry.id == entry_id)
+            )
+            entry = session.exec(statement).first()
+            if not entry:
+                return None
+
+            if content is not None:
+                entry.content = content
+            if category is not None:
+                entry.category = category
+            if difficulty is not None:
+                entry.difficulty = difficulty
+
+            if project_name is not None:
+                result = session.exec(select(Project).where(Project.name == project_name))
+                project = result.first()
+                if not project:
+                    project = Project(name=project_name)
+                    session.add(project)
+                    session.flush()
+                entry.project_id = project.id
+
+            if tags is not None:
+                for link in entry.tags:
+                    session.delete(link)
+                for tag_name in tags:
+                    result = session.exec(select(Tag).where(Tag.name == tag_name))
+                    tag = result.first()
+                    if not tag:
+                        tag = Tag(name=tag_name)
+                        session.add(tag)
+                        session.flush()
+                    link = EntryTagLink(entry_id=entry.id, tag_id=tag.id)
+                    session.add(link)
+
+            session.commit()
+            session.refresh(entry)
+            return entry
+
+    def delete_entry(self, entry_id: int) -> bool:
+        with self._session() as session:
+            entry = session.get(Entry, entry_id)
+            if not entry:
+                return False
+            session.delete(entry)
+            session.commit()
+            return True
+
+    def update_project(
+        self,
+        project_id: int,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> Project | None:
+        with self._session() as session:
+            project = session.get(Project, project_id)
+            if not project:
+                return None
+
+            if name is not None:
+                project.name = name
+            if description is not None:
+                project.description = description
+
+            session.commit()
+            session.refresh(project)
+            return project
+
+    def delete_project(self, project_id: int) -> bool:
+        with self._session() as session:
+            project = session.get(Project, project_id)
+            if not project:
+                return False
+            session.delete(project)
+            session.commit()
+            return True

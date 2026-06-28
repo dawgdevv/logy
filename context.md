@@ -16,7 +16,7 @@ Engineers build, debug, and decide daily—but most of that experience disappear
 |-------|--------|-----|
 | Runtime | **Python 3.12+** | Ecosystem, type hints, speed |
 | CLI | **Typer** + **Rich** | Industry standard, great DX |
-| TUI | **Textual** | Rich terminal UI framework |
+| TUI | **Rich** | Terminal UI built with Rich Live |
 | API | **FastAPI** | Async, auto-docs, Pydantic-native |
 | DB | **SQLite** ([sqlite-utils](https://sqlite-utils.datasette.io/)) | Zero-infra, local-first, battle-tested |
 | ORM | **SQLModel** | Pydantic + SQLAlchemy, no friction |
@@ -38,7 +38,7 @@ Engineers build, debug, and decide daily—but most of that experience disappear
 ## Architecture
 
 ```text
-typer CLI  ──►  textual TUI  ──►  FastAPI  ──►  SQLite (source of truth)
+typer CLI  ──►  Rich TUI  ──►  FastAPI  ──►  SQLite (source of truth)
                                         │
                                    LiteLLM enrichment
                                         │
@@ -59,22 +59,19 @@ logy/
 │   ├── cli/             # Typer CLI entrypoint + commands
 │   │   ├── __init__.py
 │   │   ├── main.py
-│   │   └── commands/
-│   │       ├── log.py
-│   │       ├── search.py
-│   │       ├── projects.py
-│   │       ├── review.py
-│   │       └── serve.py
-│   ├── tui/             # Textual TUI
-│   │   ├── __init__.py
-│   │   ├── app.py
-│   │   ├── screens/
-│   │   │   ├── home.py
+│   │   ├── commands/
 │   │   │   ├── log.py
 │   │   │   ├── search.py
-│   │   │   ├── project.py
-│   │   │   └── review.py
-│   │   └── widgets/
+│   │   │   ├── projects.py
+│   │   │   ├── review.py
+│   │   │   └── serve.py
+│   │   └── tui/         # Rich TUI
+│   │       ├── __init__.py
+│   │       ├── app.py
+│   │       ├── flow.py
+│   │       ├── keys.py
+│   │       ├── state.py
+│   │       └── views/
 │   ├── server/          # FastAPI backend
 │   │   ├── api/
 │   │   ├── services/
@@ -155,7 +152,7 @@ logy/
 - Weekly review generation
 
 ### Phase 5 — TUI (Days 10-12)
-- Textual app with screens for log, search, projects, review
+- Rich TUI with screens for log, search, projects, review
 - Rich formatting for terminal display
 - Streak tracking
 

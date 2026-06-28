@@ -13,5 +13,6 @@ class State:
         self.entries: list = []
         self.entry_idx = 0
         self.entry_scroll = 0
+        self.detail_scroll = 0
         self.selected_entry: dict | None = None
         self.entry_type = ""  # "daily" | "hard_problem" | "project"

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Logy is a terminal-first professional memory system for software engineers. It captures daily work via CLI, enriches entries with AI (LiteLLM), builds a knowledge graph (Cognee + NetworkX), and surfaces everything through a web dashboard (React + Vite) and TUI (Textual).
+Logy is a terminal-first professional memory system for software engineers. It captures daily work via CLI, enriches entries with AI (LiteLLM), builds a knowledge graph (Cognee + NetworkX), and surfaces everything through a web dashboard (React + Vite) and TUI (Rich).
 
 ## Tech Stack (LOCKED)
 
@@ -10,7 +10,7 @@ Logy is a terminal-first professional memory system for software engineers. It c
 |------|-------|
 | Runtime | Python 3.12+ |
 | CLI | Typer + Rich |
-| TUI | Textual |
+| TUI | Rich |
 | API | FastAPI |
 | Database | SQLite via SQLModel |
 | Migrations | Alembic |
@@ -28,7 +28,7 @@ Logy is a terminal-first professional memory system for software engineers. It c
 logy/
 ├── apps/
 │   ├── cli/          # Typer CLI
-│   ├── tui/          # Textual TUI
+│   ├── tui/          # Rich TUI
 │   ├── server/       # FastAPI backend
 │   └── web/          # React dashboard
 ├── packages/
