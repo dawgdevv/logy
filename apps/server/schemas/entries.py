@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from apps.server.schemas.projects import ProjectResponse
 from packages.shared.constants import Difficulty
 
 
@@ -27,16 +28,6 @@ class EntryUpdate(BaseModel):
 class TagResponse(BaseModel):
     id: int
     name: str
-
-    model_config = {"from_attributes": True}
-
-
-class ProjectResponse(BaseModel):
-    id: int
-    name: str
-    description: str
-    created_at: datetime
-    updated_at: datetime
 
     model_config = {"from_attributes": True}
 

@@ -49,8 +49,3 @@ def start_worker() -> None:
     repo = Repository(settings.db_path)
     _worker_task = asyncio.create_task(_worker(repo))
     logger.info("Enrichment worker started")
-
-
-async def wait_for_completion() -> None:
-    """Wait for all queued entries to be processed."""
-    await _enrichment_queue.join()
